@@ -6,28 +6,37 @@ from datetime import datetime, timedelta, timezone
 
 from models import Usuario
 from schemas import UsuarioCreateSchema, LoginSchema
-from dependencies import pegar_sessao, verificar_token
+from dependencies import pegar_sessao, verificar_token, verificar_refresh_token
 from security import SECRET_KEY, ALGORITHM, hash_senha, verificar_senha, ACCESS_TOKEN_EXPIRE_MINUTES
 
 auth_router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
-# CRIAR TOKEN
+# ─────────────────────────────────────────────
+# 🔐 CRIAR TOKEN (ACCESS / REFRESH)
+# ─────────────────────────────────────────────
 
-def criar_token(usuario: Usuario, duracao_token: timedelta = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)):
-    data_expiracao = datetime.now(timezone.utc) + duracao_token
-    
+def criar_token(usuario: Usuario, tipo: str = "access", duracao_token: timedelta = None):
+
+    if not duracao_token:
+        if tipo == "access":
+            duracao_token = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        else:
+            duracao_token = timedelta(days=7)
+
     payload = {
         "sub": str(usuario.id),
-        "role": usuario.role,   #importante
-        "exp": data_expiracao
+        "role": usuario.role,
+        "type": tipo,  # 👈 diferencia access e refresh
+        "exp": datetime.now(timezone.utc) + duracao_token
     }
 
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
-
-# AUTENTICAR USUÁRIO
+# ─────────────────────────────────────────────
+# 👤 AUTENTICAR USUÁRIO
+# ─────────────────────────────────────────────
 
 def autenticar_usuario(email: str, senha: str, session: Session):
     usuario = session.query(Usuario).filter(Usuario.email == email).first()
@@ -41,20 +50,28 @@ def autenticar_usuario(email: str, senha: str, session: Session):
     return usuario
 
 
-# ROTA TESTE
+# ─────────────────────────────────────────────
+# 🏠 TESTE
+# ─────────────────────────────────────────────
 
 @auth_router.get("/")
 async def home():
-    return {"mensagem": "Rota de autenticação funcionando!"}
+    return {"mensagem": "Auth funcionando"}
 
 
-
-# CRIAR CONTA
+# ─────────────────────────────────────────────
+# 📝 CRIAR CONTA
+# ─────────────────────────────────────────────
 
 @auth_router.post("/criar_conta")
-async def criar_conta(usuario_schema: UsuarioCreateSchema, session: Session = Depends(pegar_sessao)):
+async def criar_conta(
+    usuario_schema: UsuarioCreateSchema,
+    session: Session = Depends(pegar_sessao)
+):
 
-    usuario_existente = session.query(Usuario).filter(Usuario.email == usuario_schema.email).first()
+    usuario_existente = session.query(Usuario).filter(
+        Usuario.email == usuario_schema.email
+    ).first()
 
     if usuario_existente:
         raise HTTPException(status_code=400, detail="E-mail já cadastrado")
@@ -65,17 +82,19 @@ async def criar_conta(usuario_schema: UsuarioCreateSchema, session: Session = De
         nome=usuario_schema.nome,
         email=usuario_schema.email,
         senha=senha_criptografada,
-        role=usuario_schema.role  #  estudante ou coordenador
+        role=usuario_schema.role.value
     )
 
     session.add(novo_usuario)
     session.commit()
     session.refresh(novo_usuario)
 
-    return {"msg": "Usuário criado com sucesso"}
+    return {"mensagem": "Usuário criado com sucesso"}
 
 
-# LOGIN (JSON)
+# ─────────────────────────────────────────────
+# 🔑 LOGIN JSON
+# ─────────────────────────────────────────────
 
 @auth_router.post("/login")
 async def login(login_schema: LoginSchema, session: Session = Depends(pegar_sessao)):
@@ -83,10 +102,10 @@ async def login(login_schema: LoginSchema, session: Session = Depends(pegar_sess
     usuario = autenticar_usuario(login_schema.email, login_schema.senha, session)
 
     if not usuario:
-        raise HTTPException(status_code=400, detail="Credenciais inválidas")
+        raise HTTPException(status_code=401, detail="Credenciais inválidas")
 
-    access_token = criar_token(usuario)
-    refresh_token = criar_token(usuario, duracao_token=timedelta(days=7))
+    access_token = criar_token(usuario, tipo="access")
+    refresh_token = criar_token(usuario, tipo="refresh")
 
     return {
         "access_token": access_token,
@@ -94,29 +113,23 @@ async def login(login_schema: LoginSchema, session: Session = Depends(pegar_sess
         "token_type": "Bearer"
     }
 
-# LOGIN FORM (Swagger)
+
+# ─────────────────────────────────────────────
+# 🔑 LOGIN FORM (Swagger)
+# ─────────────────────────────────────────────
 
 @auth_router.post("/login-form")
 async def login_form(
-    dados_formulario: OAuth2PasswordRequestForm = Depends(),
+    dados: OAuth2PasswordRequestForm = Depends(),
     session: Session = Depends(pegar_sessao)
 ):
 
-    usuario = autenticar_usuario(dados_formulario.username, dados_formulario.password, session)
+    usuario = autenticar_usuario(dados.username, dados.password, session)
 
     if not usuario:
-        raise HTTPException(status_code=400, detail="Credenciais inválidas")
+        raise HTTPException(status_code=401, detail="Credenciais inválidas")
 
-    access_token = criar_token(usuario)
-
-    return {"access_token": access_token, "token_type": "Bearer"}
-
-
-# REFRESH TOKEN
-
-@auth_router.get("/refresh")
-async def refresh_token(usuario: Usuario = Depends(verificar_token)):
-    access_token = criar_token(usuario)
+    access_token = criar_token(usuario, tipo="access")
 
     return {
         "access_token": access_token,
@@ -124,7 +137,24 @@ async def refresh_token(usuario: Usuario = Depends(verificar_token)):
     }
 
 
-# USUÁRIO LOGADO
+# ─────────────────────────────────────────────
+# 🔄 REFRESH TOKEN (CORRETO)
+# ─────────────────────────────────────────────
+
+@auth_router.post("/refresh")
+async def refresh(usuario: Usuario = Depends(verificar_refresh_token)):
+
+    access_token = criar_token(usuario, tipo="access")
+
+    return {
+        "access_token": access_token,
+        "token_type": "Bearer"
+    }
+
+
+# ─────────────────────────────────────────────
+# 👤 USUÁRIO LOGADO
+# ─────────────────────────────────────────────
 
 @auth_router.get("/me")
 async def perfil(usuario: Usuario = Depends(verificar_token)):
