@@ -14,19 +14,37 @@ class Usuario(Base):
     role      = Column(String, nullable=False)
     foto_url  = Column(String, nullable=True)
 
-    # Relacionamentos
+    # Verificação de e-mail
+    email_verificado  = Column(Boolean, default=False)
+    token_verificacao = Column(String, nullable=True)
+    token_expira_em   = Column(DateTime(timezone=True), nullable=True)
+
+    # Campos do coordenador
+    cpf         = Column(String, nullable=True)
+    celular     = Column(String, nullable=True)
+    area        = Column(String, nullable=True)
+    subarea     = Column(String, nullable=True)
+    instituicao = Column(String, nullable=True)
+
+    # Validação de documento
+    documento_url      = Column(String, nullable=True)
+    documento_nome     = Column(String, nullable=True)
+    status_validacao   = Column(String, nullable=True)
+    validacao_mensagem = Column(String, nullable=True)
+    validado_em        = Column(DateTime(timezone=True), nullable=True)
+
+    criado_em = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relacionamentos (sem alteração)
     seletivos_criados  = relationship("Seletivo", back_populates="coordenador")
     favoritos          = relationship("Favorito", back_populates="usuario")
     notificacoes       = relationship("Notificacao", back_populates="usuario")
     tokens_recuperacao = relationship("TokenRecuperacao", back_populates="usuario")
-
-    #  NOVO
     favoritos_programa = relationship(
         "FavoritoPrograma",
         back_populates="usuario",
         cascade="all, delete-orphan"
     )
-
 
 class Seletivo(Base):
     __tablename__ = "seletivos"
@@ -35,17 +53,65 @@ class Seletivo(Base):
     titulo         = Column(String, nullable=False)
     descricao      = Column(Text, nullable=False)
     area           = Column(String, nullable=True)
+    subarea        = Column(String, nullable=True)        # novo
     data_inicio    = Column(DateTime(timezone=True), nullable=False)
     data_fim       = Column(DateTime(timezone=True), nullable=False)
+    data_prova     = Column(DateTime(timezone=True), nullable=True)  # novo
     link_inscricao = Column(String, nullable=True)
     bolsa_valor    = Column(Float, nullable=True)
     nivel          = Column(String, nullable=True)
+    favoritos      = Column(Integer, default=0)           # novo
+    nota_capes     = Column(Integer, nullable=True)       # novo
     coordenador_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
     criado_em      = Column(DateTime(timezone=True), server_default=func.now())
 
     coordenador  = relationship("Usuario", back_populates="seletivos_criados")
-    favoritos    = relationship("Favorito", back_populates="seletivo")
     notificacoes = relationship("Notificacao", back_populates="seletivo")
+    etapas       = relationship("EtapaSeletivo", back_populates="seletivo", cascade="all, delete-orphan")
+    editais      = relationship("Edital", back_populates="seletivo", cascade="all, delete-orphan")
+
+    favoritos = relationship("Favorito", back_populates="seletivo")
+
+
+class EtapaSeletivo(Base):
+    __tablename__ = "etapas_seletivo"
+
+    id          = Column(Integer, primary_key=True, index=True)
+    seletivo_id = Column(Integer, ForeignKey("seletivos.id"), nullable=False)
+    ordem       = Column(Integer, nullable=False)
+    descricao   = Column(Text, nullable=False)
+
+    seletivo = relationship("Seletivo", back_populates="etapas")
+
+
+class Edital(Base):
+    __tablename__ = "editais"
+
+    id                   = Column(Integer, primary_key=True, index=True)
+    seletivo_id          = Column(Integer, ForeignKey("seletivos.id"), nullable=False)
+    titulo               = Column(String, nullable=False)
+    descricao            = Column(Text, nullable=True)
+    vagas                = Column(Integer, nullable=True)
+    data_inicio_inscricao = Column(DateTime(timezone=True), nullable=True)
+    data_fim_inscricao   = Column(DateTime(timezone=True), nullable=True)
+    data_prova           = Column(DateTime(timezone=True), nullable=True)
+    criado_em            = Column(DateTime(timezone=True), server_default=func.now())
+
+    seletivo   = relationship("Seletivo", back_populates="editais")
+    documentos = relationship("DocumentoEdital", back_populates="edital", cascade="all, delete-orphan")
+
+
+class DocumentoEdital(Base):
+    __tablename__ = "documentos_edital"
+
+    id          = Column(Integer, primary_key=True, index=True)
+    edital_id   = Column(Integer, ForeignKey("editais.id"), nullable=False)
+    titulo      = Column(String, nullable=False)
+    url_arquivo = Column(String, nullable=True)
+    url_externo = Column(String, nullable=True)
+    is_pdf      = Column(Boolean, default=False)
+
+    edital = relationship("Edital", back_populates="documentos")
 
 
 class Favorito(Base):
@@ -56,6 +122,8 @@ class Favorito(Base):
     seletivo_id = Column(Integer, ForeignKey("seletivos.id"), nullable=False)
 
     usuario  = relationship("Usuario", back_populates="favoritos")
+    seletivo = relationship("Seletivo", back_populates="favoritos")
+
     seletivo = relationship("Seletivo", back_populates="favoritos")
 
 

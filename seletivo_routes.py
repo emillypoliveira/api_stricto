@@ -2,8 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
-from models import Seletivo, Favorito, Usuario
-from schemas import SeletivoCreateSchema, SeletivoUpdateSchema, SeletivoResponse
+from models import Seletivo, Favorito, Usuario, EtapaSeletivo, Edital, DocumentoEdital
+from schemas import (
+    SeletivoCreateSchema, SeletivoUpdateSchema, SeletivoResponse,
+    EtapaResponse, EditalResponse, DocumentoEditalCreate, EditalCreate )
 from dependencies import pegar_sessao, verificar_token, apenas_coordenador
 
 seletivo_router = APIRouter(prefix="/seletivos", tags=["Seletivos"])
@@ -23,15 +25,44 @@ def montar_response(seletivo: Seletivo, usuario_id: int, session: Session) -> di
         "titulo": seletivo.titulo,
         "descricao": seletivo.descricao,
         "area": seletivo.area,
+        "subarea": seletivo.subarea,
         "data_inicio": seletivo.data_inicio,
         "data_fim": seletivo.data_fim,
+        "data_prova": seletivo.data_prova,
         "link_inscricao": seletivo.link_inscricao,
         "bolsa_valor": seletivo.bolsa_valor,
         "nivel": seletivo.nivel,
+        "favoritos": seletivo.favoritos,
+        "nota_capes": seletivo.nota_capes,
         "coordenador_id": seletivo.coordenador_id,
         "coordenador_nome": seletivo.coordenador.nome if seletivo.coordenador else None,
         "favoritado": favoritado,
         "criado_em": seletivo.criado_em,
+        "etapas": [{"id": e.id, "ordem": e.ordem, "descricao": e.descricao} for e in seletivo.etapas],
+        "editais": [
+            {
+                "id": ed.id,
+                "seletivo_id": ed.seletivo_id,
+                "titulo": ed.titulo,
+                "descricao": ed.descricao,
+                "vagas": ed.vagas,
+                "data_inicio_inscricao": ed.data_inicio_inscricao,
+                "data_fim_inscricao": ed.data_fim_inscricao,
+                "data_prova": ed.data_prova,
+                "criado_em": ed.criado_em,
+                "documentos": [
+                    {
+                        "id": d.id,
+                        "titulo": d.titulo,
+                        "url_arquivo": d.url_arquivo,
+                        "url_externo": d.url_externo,
+                        "is_pdf": d.is_pdf,
+                    }
+                    for d in ed.documentos
+                ],
+            }
+            for ed in seletivo.editais
+        ],
     }
 
 
@@ -254,3 +285,143 @@ async def deletar_seletivo(
     session.commit()
 
     return {"msg": "Seletivo deletado com sucesso"}
+
+
+
+# ETAPAS
+
+
+@coordenador_router.post("/{seletivo_id}/etapas")
+async def adicionar_etapa(
+    seletivo_id: int,
+    dados: EtapaResponse,
+    session: Session = Depends(pegar_sessao),
+    usuario: Usuario = Depends(apenas_coordenador),
+):
+    seletivo = session.query(Seletivo).filter(
+        Seletivo.id == seletivo_id,
+        Seletivo.coordenador_id == usuario.id,
+    ).first()
+
+    if not seletivo:
+        raise HTTPException(status_code=404, detail="Seletivo não encontrado")
+
+    etapa = EtapaSeletivo(
+        seletivo_id=seletivo_id,
+        ordem=dados.ordem,
+        descricao=dados.descricao,
+    )
+    session.add(etapa)
+    session.commit()
+    session.refresh(etapa)
+
+    return {"id": etapa.id, "ordem": etapa.ordem, "descricao": etapa.descricao}
+
+
+@coordenador_router.delete("/{seletivo_id}/etapas/{etapa_id}")
+async def deletar_etapa(
+    seletivo_id: int,
+    etapa_id: int,
+    session: Session = Depends(pegar_sessao),
+    usuario: Usuario = Depends(apenas_coordenador),
+):
+    etapa = session.query(EtapaSeletivo).filter(
+        EtapaSeletivo.id == etapa_id,
+        EtapaSeletivo.seletivo_id == seletivo_id,
+    ).first()
+
+    if not etapa:
+        raise HTTPException(status_code=404, detail="Etapa não encontrada")
+
+    session.delete(etapa)
+    session.commit()
+
+    return {"msg": "Etapa deletada com sucesso"}
+
+
+
+# EDITAIS
+
+
+@coordenador_router.post("/{seletivo_id}/editais")
+async def adicionar_edital(
+    seletivo_id: int,
+    dados: EditalCreate,
+    session: Session = Depends(pegar_sessao),
+    usuario: Usuario = Depends(apenas_coordenador),
+):
+    seletivo = session.query(Seletivo).filter(
+        Seletivo.id == seletivo_id,
+        Seletivo.coordenador_id == usuario.id,
+    ).first()
+
+    if not seletivo:
+        raise HTTPException(status_code=404, detail="Seletivo não encontrado")
+
+    edital = Edital(
+        seletivo_id=seletivo_id,
+        titulo=dados.titulo,
+        descricao=dados.descricao,
+        vagas=dados.vagas,
+        data_inicio_inscricao=dados.data_inicio_inscricao,
+        data_fim_inscricao=dados.data_fim_inscricao,
+        data_prova=dados.data_prova,
+    )
+    session.add(edital)
+    session.flush()  # pega o id antes do commit
+
+    for doc in dados.documentos:
+        documento = DocumentoEdital(
+            edital_id=edital.id,
+            titulo=doc.titulo,
+            url_arquivo=doc.url_arquivo,
+            url_externo=doc.url_externo,
+            is_pdf=doc.is_pdf,
+        )
+        session.add(documento)
+
+    session.commit()
+    session.refresh(edital)
+
+    return {
+        "id": edital.id,
+        "seletivo_id": edital.seletivo_id,
+        "titulo": edital.titulo,
+        "descricao": edital.descricao,
+        "vagas": edital.vagas,
+        "data_inicio_inscricao": edital.data_inicio_inscricao,
+        "data_fim_inscricao": edital.data_fim_inscricao,
+        "data_prova": edital.data_prova,
+        "criado_em": edital.criado_em,
+        "documentos": [
+            {
+                "id": d.id,
+                "titulo": d.titulo,
+                "url_arquivo": d.url_arquivo,
+                "url_externo": d.url_externo,
+                "is_pdf": d.is_pdf,
+            }
+            for d in edital.documentos
+        ],
+    }
+
+
+@coordenador_router.delete("/{seletivo_id}/editais/{edital_id}")
+async def deletar_edital(
+    seletivo_id: int,
+    edital_id: int,
+    session: Session = Depends(pegar_sessao),
+    usuario: Usuario = Depends(apenas_coordenador),
+):
+    edital = session.query(Edital).filter(
+        Edital.id == edital_id,
+        Edital.seletivo_id == seletivo_id,
+    ).first()
+
+    if not edital:
+        raise HTTPException(status_code=404, detail="Edital não encontrado")
+
+    session.delete(edital)
+    session.commit()
+
+    return {"msg": "Edital deletado com sucesso"}

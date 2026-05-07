@@ -5,16 +5,14 @@ from jose import jwt
 from datetime import datetime, timedelta, timezone
 
 from models import Usuario
-from schemas import UsuarioCreateSchema, LoginSchema
+from schemas import UsuarioCreateSchema, LoginSchema, CompletarPerfilEstudanteSchema, CompletarPerfilCoordenadorSchema, UsuarioResponse
 from dependencies import pegar_sessao, verificar_token, verificar_refresh_token
 from security import SECRET_KEY, ALGORITHM, hash_senha, verificar_senha, ACCESS_TOKEN_EXPIRE_MINUTES
 
 auth_router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
-# ─────────────────────────────────────────────
-# 🔐 CRIAR TOKEN (ACCESS / REFRESH)
-# ─────────────────────────────────────────────
+# CRIAR TOKEN (ACCESS / REFRESH)
 
 def criar_token(usuario: Usuario, tipo: str = "access", duracao_token: timedelta = None):
 
@@ -164,3 +162,27 @@ async def perfil(usuario: Usuario = Depends(verificar_token)):
         "email": usuario.email,
         "role": usuario.role
     }
+
+
+# ─────────────────────────────────────────────
+# 📋 COMPLETAR PERFIL (ONBOARDING)
+# ─────────────────────────────────────────────
+
+@auth_router.patch("/completar-perfil")
+async def completar_perfil(
+    dados: dict,
+    session: Session = Depends(pegar_sessao),
+    usuario: Usuario = Depends(verificar_token),
+):
+    if usuario.role == "coordenador":
+        schema = CompletarPerfilCoordenadorSchema(**dados)
+    else:
+        schema = CompletarPerfilEstudanteSchema(**dados)
+
+    campos = schema.model_dump(exclude_none=True)
+    for campo, valor in campos.items():
+        setattr(usuario, campo, valor)
+
+    session.commit()
+    session.refresh(usuario)
+    return UsuarioResponse.model_validate(usuario)

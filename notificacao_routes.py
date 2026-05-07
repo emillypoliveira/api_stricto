@@ -10,9 +10,8 @@ from email_service import enviar_email_notificacao
 notificacao_router = APIRouter(prefix="/notificacoes", tags=["Notificações"])
 
 
-# ─────────────────────────────────────────────
 # WEBSOCKET — /notificacoes/ws
-# ─────────────────────────────────────────────
+
 @notificacao_router.websocket("/ws")
 async def websocket_notificacoes(
     websocket: WebSocket,
