@@ -9,9 +9,8 @@ from fastapi.security import OAuth2PasswordBearer
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login-form")
 
 
-# ─────────────────────────────────────────────
-# 🗄️ SESSÃO DB
-# ─────────────────────────────────────────────
+
+# SESSÃO DB
 
 def pegar_sessao():
     db = SessionLocal()
@@ -21,9 +20,7 @@ def pegar_sessao():
         db.close()
 
 
-# ─────────────────────────────────────────────
-# 🔐 TOKEN NORMAL (ACCESS)
-# ─────────────────────────────────────────────
+# TOKEN NORMAL (ACCESS)
 
 def verificar_token(
     token: str = Depends(oauth2_scheme),
@@ -48,9 +45,8 @@ def verificar_token(
     return usuario
 
 
-# ─────────────────────────────────────────────
-# 🔄 TOKEN REFRESH
-# ─────────────────────────────────────────────
+
+# TOKEN REFRESH
 
 def verificar_refresh_token(
     token: str = Depends(oauth2_scheme),
@@ -75,9 +71,8 @@ def verificar_refresh_token(
     return usuario
 
 
-# ─────────────────────────────────────────────
-# 🌐 WEBSOCKET
-# ─────────────────────────────────────────────
+
+# WEBSOCKET
 
 async def verificar_token_ws(
     websocket: WebSocket,
@@ -105,9 +100,8 @@ async def verificar_token_ws(
     return usuario
 
 
-# ─────────────────────────────────────────────
-# 👑 PERMISSÃO
-# ─────────────────────────────────────────────
+
+# PERMISSÃO
 
 def apenas_coordenador(usuario: Usuario = Depends(verificar_token)):
     if usuario.role != "coordenador":

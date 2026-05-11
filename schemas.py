@@ -7,7 +7,7 @@ from enum import Enum
 # ── Usuário / Auth ──────────────────────
 
 class RoleEnum(str, Enum):
-    aluno = "aluno"
+    estudante = "estudante"
     coordenador = "coordenador"
 
 
