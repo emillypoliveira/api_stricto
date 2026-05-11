@@ -45,11 +45,11 @@ def _html_verificacao(nome: str, link: str) -> str:
     <body style="margin:0;padding:0;background:#f4f4f4;font-family:Arial,sans-serif;">
       <div style="max-width:600px;margin:40px auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.1);">
         <div style="background:#4F46E5;color:#fff;padding:24px;font-size:20px;font-weight:bold;">
-          Confirme seu e-mail — Stricto
+          Confirme seu e-mail — ViaEduca
         </div>
         <div style="padding:32px 24px;color:#333;font-size:15px;line-height:1.8;">
           <p>Olá, <strong>{nome}</strong>! 👋</p>
-          <p>Obrigado por se cadastrar no <strong>Stricto</strong>. Para ativar sua conta, confirme seu endereço de e-mail clicando no botão abaixo:</p>
+          <p>Obrigado por se cadastrar no <strong>ViaEduca</strong>. Para ativar sua conta, confirme seu endereço de e-mail clicando no botão abaixo:</p>
           <div style="text-align:center;margin:32px 0;">
             <a href="{link}"
                style="background:#4F46E5;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:16px;display:inline-block;">
@@ -61,11 +61,11 @@ def _html_verificacao(nome: str, link: str) -> str:
             <a href="{link}" style="color:#4F46E5;word-break:break-all;">{link}</a>
           </p>
           <p style="color:#999;font-size:12px;margin-top:24px;">
-            ⚠️ Este link expira em <strong>24 horas</strong>. Se você não criou uma conta no Stricto, ignore este e-mail.
+            ⚠️ Este link expira em <strong>24 horas</strong>. Se você não criou uma conta no ViaEduca, ignore este e-mail.
           </p>
         </div>
         <div style="padding:16px 24px;font-size:12px;color:#999;background:#f9f9f9;">
-          © Stricto — Plataforma de Pós-Graduação
+          © ViaEduca — Plataforma de Pós-Graduação
         </div>
       </div>
     </body>
@@ -92,7 +92,7 @@ async def enviar_email_verificacao(
         params = {
             "from": EMAIL_FROM,
             "to": [destinatario],
-            "subject": "Confirme seu e-mail — Stricto",
+            "subject": "Confirme seu e-mail — ViaEduca",
             "html": _html_verificacao(nome, link),
             "text": f"Olá {nome}! Acesse o link para verificar seu e-mail: {link}\n\nO link expira em 24 horas.",
         }

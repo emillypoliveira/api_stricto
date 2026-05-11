@@ -21,3 +21,8 @@ app.include_router(programa_router)
 @app.get("/")
 def home():
     return {"msg": "API rodando "}
+
+
+from teste_routes import teste_router
+
+app.include_router(teste_router)
